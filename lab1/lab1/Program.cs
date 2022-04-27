@@ -18,6 +18,12 @@ namespace lab1
         public DataType Type { get; set; }
     }
 
+    class ViewModel 
+    {
+        public int InputCount { get; set; }
+        public float Accuracy { get; set; }
+    }
+
     internal class Program
     {
         static char[] delimiterChars = { ' ', ',', '.', ':', '\t', '{', '}', '[', ']', '/', '*', '\'', '\"', '+', '-', '#', '!', '?' };
@@ -41,102 +47,84 @@ namespace lab1
             Shuffle(notSpamWords);
             Shuffle(spamWords);
 
-            Dictionary<Data, float> totalWordsCollection = new Dictionary<Data, float>();
-            Dictionary<Data, float> spamWordsCollection = new Dictionary<Data, float>();
-            Dictionary<Data, float> notSpamWordsCollection = new Dictionary<Data, float>();
-
             int i_notSpam = notSpamWords.Count / 3;
             int i_spam = spamWords.Count / 3;
 
             ArrayList testData = new ArrayList();
-            for (int i = i_notSpam; i < notSpamWords.Count; i++)
+            InitializeTestData(notSpamWords, spamWords, i_notSpam, i_spam, testData);
+
+            ArrayList viewModels = new ArrayList();
+
+            for (int i = 0; i < Math.Max(i_notSpam, i_spam); i += 1000)
             {
-                var data = new Data() { Value = notSpamWords[i].ToString(), Type = DataType.NOT_SPAM };
-                testData.Add(data);
-            }
-            for (int i = i_spam; i < spamWords.Count; i++)
-            {
-                var data = new Data() { Value = spamWords[i].ToString(), Type = DataType.SPAM};
-                testData.Add(data);
-            }
+                int spamThreshold = i > i_spam ? i_spam : i;
+                int notSpamThreshold = i > i_notSpam ? i_notSpam : i;
+
+                Dictionary<Data, float> totalWordsCollection
+                    = new Dictionary<Data, float>();
+                Dictionary<Data, float> spamWordsCollection
+                    = new Dictionary<Data, float>();
+                Dictionary<Data, float> notSpamWordsCollection
+                    = new Dictionary<Data, float>();
 
 
-            for (int i = 0; i < i_notSpam; i++)
-            {
-                String[] _notSpamWords = notSpamWords[i].ToString().Split(delimiterChars);
 
-                foreach (string word in _notSpamWords)
-                {
-                    if (word == "")
-                    {
-                        continue;
-                    }
+                NotSpamWordsCounting(notSpamWords, totalWordsCollection, notSpamWordsCollection, notSpamThreshold);
+                SpamWordsCounting(spamWords, totalWordsCollection, spamWordsCollection, spamThreshold);
 
-                    //spamWordsCollection.TryAdd(word.ToLower(), 0);
+                Dictionary<Data, float> notSpamWordsProbability = new Dictionary<Data, float>();
+                Dictionary<Data, float> spamWordsProbability = new Dictionary<Data, float>();
 
-                    var data = new Data() { Value = word.ToLower(), Type = DataType.NOT_SPAM };
+                NotSpamWordProbabilityCalc(totalWordsCollection, notSpamWordsCollection, notSpamWordsProbability);
+                SpamWordProbabilityCalc(totalWordsCollection, spamWordsCollection, spamWordsProbability);
 
-                    if (!totalWordsCollection.TryAdd(data, 1))
-                    {
-                        totalWordsCollection[data]++;
-                    }
+                int detectedSpamCount = 0;
+                int detectedNotSpamCount = 0;
+                int newWordsMessageCount = 0;
 
-                    if (!notSpamWordsCollection.TryAdd(data, 1))
-                    {
-                        notSpamWordsCollection[data]++;
-                    }
-                }
-            }
+                DataTesting(
+                    testData,
+                    notSpamWordsProbability,
+                    spamWordsProbability,
+                    ref detectedSpamCount,
+                    ref detectedNotSpamCount,
+                    ref newWordsMessageCount);
 
-            for (int i = 0; i < i_spam; i++)
-            {
-                String[] _spamWords = spamWords[i].ToString().Split(delimiterChars);
-                foreach (string word in _spamWords)
-                {
-                    if (word == "")
-                    {
-                        continue;
-                    }
+                Console.WriteLine("Detected spam out of: " + detectedSpamCount + "/" + (testData.Count - i_notSpam*2));
+                Console.WriteLine("Detected not spam out of: " + detectedNotSpamCount + "/" + (testData.Count - i_spam * 2));
+                Console.WriteLine("Total words: " + testData.Count);
 
-                    //notSpamWordsCollection.TryAdd(word.ToLower(), 0);
+                float a = detectedSpamCount + detectedNotSpamCount;
+                float b = testData.Count;
 
-                    var data = new Data() { Value = word.ToLower(), Type = DataType.SPAM };
-
-                    if (!totalWordsCollection.TryAdd(data, 1))
-                    {
-                        totalWordsCollection[data]++;
-                    }
-
-                    if (!spamWordsCollection.TryAdd(data, 1))
-                    {
-                        spamWordsCollection[data]++;
-                    }
-                }
-
+                float coef = a / b;
+                Console.WriteLine("Coef: " + coef);
+                viewModels.Add(new ViewModel { InputCount = spamThreshold + notSpamThreshold, Accuracy = coef});
+                Console.WriteLine("----------------------------------------------------------------------------------------");
             }
 
-            Dictionary<Data, float> notSpamWordsProbability = new Dictionary<Data, float>();
-            Dictionary<Data, float> spamWordsProbability = new Dictionary<Data, float>();
-
-            foreach (var item in notSpamWordsCollection)
+            FileStream file = File.Create("accuracy.txt");
+            StreamWriter streamWriter = new StreamWriter(file);
+            for (int i = 0; i < viewModels.Count; i++)
             {
-                notSpamWordsProbability[item.Key] =
-                    (totalWordsCollection[item.Key] * (notSpamWordsCollection[item.Key] / totalWordsCollection[item.Key]) + 0.5f) /
-                    (totalWordsCollection[item.Key] + 1.0f);
+                ViewModel v = viewModels[i] as ViewModel;
+                streamWriter.WriteLine("accuracy: " + v.Accuracy + "; count: " + v.InputCount);
             }
+            streamWriter.Dispose();
+            streamWriter.Close();
+            file.Dispose ();
+            file.Close();
+            buildGraph("main.py");
 
-            foreach (var item in spamWordsCollection)
-            {
-                spamWordsProbability[item.Key] =
-                    (totalWordsCollection[item.Key] * (spamWordsCollection[item.Key] / totalWordsCollection[item.Key]) + 0.5f) /
-                    (totalWordsCollection[item.Key] + 1.0f);
-            }
+        }
 
-            int detectedSpamCount = 0;
-            int detectedNotSpamCount = 0;
-            int newWordsMessageCount = 0;
-
-
+        private static void DataTesting(ArrayList testData, 
+            Dictionary<Data, float> notSpamWordsProbability, 
+            Dictionary<Data, float> spamWordsProbability, 
+            ref int detectedSpamCount, 
+            ref int detectedNotSpamCount, 
+            ref int newWordsMessageCount)
+        {
             for (int i = 0; i < testData.Count; i++)
             {
                 Data d = (Data)testData[i];
@@ -172,12 +160,8 @@ namespace lab1
                 if (notSpamProbability == 1)
                     notSpamProbability = 0;
 
-
-                //Console.Write(notSpamWords[i].ToString() + ": ");
-
                 if (spamProbability > notSpamProbability)
                 {
-                    //Console.WriteLine("It is spam");
                     if (d.Type == DataType.SPAM)
                         detectedSpamCount++;
                 }
@@ -192,28 +176,142 @@ namespace lab1
                 }
 
             }
-
-            
-
-            Console.WriteLine("Detected spam out of: " + detectedSpamCount + "/" + (spamWords.Count - i_spam));
-            Console.WriteLine("Detected not spam out of: " + detectedNotSpamCount + "/" + (notSpamWords.Count - i_notSpam));
-            Console.WriteLine("Total words: " + testData.Count);
-            Console.WriteLine("Building diagram...");
-
-            float a = detectedSpamCount;
-            float b = (spamWords.Count - i_spam);
-
-            float coef = a / b;
-            run_cmd("main.py", String.Format("{0} {1}", coef, b));
-
-
         }
 
-        private static void run_cmd(string cmd, string args)
+        private static void SpamWordProbabilityCalc(
+            Dictionary<Data, float> totalWordsCollection, 
+            Dictionary<Data, float> spamWordsCollection, 
+            Dictionary<Data, float> spamWordsProbability)
+        {
+            foreach (var item in spamWordsCollection)
+            {
+
+                spamWordsProbability[item.Key] = normalizingWordProbability(
+                    totalWordsCollection[item.Key],
+                    spamWordsCollection[item.Key],
+                    0.5f);
+            }
+        }
+
+        private static void NotSpamWordProbabilityCalc(
+            Dictionary<Data, float> totalWordsCollection,
+            Dictionary<Data, float> notSpamWordsCollection,
+            Dictionary<Data, float> notSpamWordsProbability)
+        {
+            foreach (var item in notSpamWordsCollection)
+            {
+                notSpamWordsProbability[item.Key] = normalizingWordProbability(
+                    totalWordsCollection[item.Key],
+                    notSpamWordsCollection[item.Key],
+                    0.5f);
+            }
+        }
+
+        private static float normalizingWordProbability(
+            float wordProbabilityGeneral,
+            float wordProbabilityClass,
+            float classProbability)
+        {
+            return (wordProbabilityGeneral * (wordProbabilityClass / wordProbabilityGeneral) + 
+                classProbability) / (wordProbabilityGeneral + 1.0f);
+        }
+
+        private static void SpamWordsCounting(
+            ArrayList spamWords, 
+            Dictionary<Data, float> totalWordsCollection, 
+            Dictionary<Data, float> spamWordsCollection, 
+            int spam_data_test_threshold)
+        {
+            for (int i = 0; i < spam_data_test_threshold; i++)
+            {
+                String[] _spamWords = spamWords[i].ToString().Split(delimiterChars);
+                foreach (string word in _spamWords)
+                {
+                    if (word == "")
+                    {
+                        continue;
+                    }
+
+                    var data = new Data() { Value = word.ToLower(), Type = DataType.SPAM };
+
+                    if (!totalWordsCollection.TryAdd(data, 1))
+                    {
+                        totalWordsCollection[data]++;
+                    }
+
+                    if (!spamWordsCollection.TryAdd(data, 1))
+                    {
+                        spamWordsCollection[data]++;
+                    }
+                }
+
+            }
+        }
+
+        private static void NotSpamWordsCounting(
+            ArrayList notSpamWords, 
+            Dictionary<Data, float> totalWordsCollection, 
+            Dictionary<Data, float> notSpamWordsCollection, 
+            int notSpam_data_test_threshold)
+        {
+            for (int i = 0; i < notSpam_data_test_threshold; i++)
+            {
+                String[] _notSpamWords = notSpamWords[i].ToString().Split(delimiterChars);
+
+                foreach (string word in _notSpamWords)
+                {
+                    if (word == "")
+                    {
+                        continue;
+                    }
+
+                    var data = new Data() { Value = word.ToLower(), Type = DataType.NOT_SPAM };
+
+                    if (!totalWordsCollection.TryAdd(data, 1))
+                    {
+                        totalWordsCollection[data]++;
+                    }
+
+                    if (!notSpamWordsCollection.TryAdd(data, 1))
+                    {
+                        notSpamWordsCollection[data]++;
+                    }
+                }
+            }
+        }
+
+        private static void InitializeTestData(
+            ArrayList notSpamWords, 
+            ArrayList spamWords, 
+            int notSpam_data_test_threshold, 
+            int spam_data_test_threshold, 
+            ArrayList testData)
+        {
+            for (int i = notSpam_data_test_threshold; i < notSpamWords.Count; i++)
+            {
+                var data = new Data()
+                {
+                    Value = notSpamWords[i].ToString(),
+                    Type = DataType.NOT_SPAM
+                };
+                testData.Add(data);
+            }
+            for (int i = spam_data_test_threshold; i < spamWords.Count; i++)
+            {
+                var data = new Data()
+                {
+                    Value = spamWords[i].ToString(),
+                    Type = DataType.SPAM
+                };
+                testData.Add(data);
+            }
+        }
+
+        private static void buildGraph(string cmd)
         {
             ProcessStartInfo start = new ProcessStartInfo();
             start.FileName = "python.exe";
-            start.Arguments = string.Format("{0} {1}", cmd, args);
+            start.Arguments = string.Format("{0}", cmd);
             start.UseShellExecute = false;
             start.RedirectStandardOutput = true;
             using (Process process = Process.Start(start))
@@ -226,7 +324,8 @@ namespace lab1
             }
         }
 
-        static void ReadCsvFile<E>(string pathToFile, ArrayList appendingWordsList, int itemCount = 101) where E : BaseModel
+        static void ReadCsvFile<E>(string pathToFile, 
+            ArrayList appendingWordsList) where E : BaseModel
         {
             using (var reader = new StreamReader(pathToFile))
             {
@@ -239,7 +338,6 @@ namespace lab1
                     }
                 }
             }
-
         }
 
         static void Shuffle(ArrayList arr)

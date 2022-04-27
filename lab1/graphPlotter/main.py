@@ -1,23 +1,26 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import sys
+import re
 
-def drawPlot(coef, totalSpamElements):
-    x = [x for x in range(0, totalSpamElements)]
-    y = [f * coef for f in x]
+def drawPlot(x, y):
     fig, ax = plt.subplots()
     ax.plot(x, y, linewidth=2.0)
-    ax.set(xlim=(0, x[-1]), xticks=np.arange(1, x[-1]),
-           ylim=(0, y[-1]), yticks=np.arange(1, x[-1]))
-    plt.xticks([x[0], x[-1]], visible=True, rotation="horizontal")
-    plt.yticks([y[0], y[-1], x[-1]], visible=True, rotation="horizontal")
-
     plt.show()
-
 
 if __name__ == '__main__':
     print('Argument List:', str(sys.argv))
-
-    coef = float(sys.argv[1])
-    totalSpamElements = int(sys.argv[2])
-    drawPlot(coef, totalSpamElements)
+    x = []
+    y = []
+    regex = "^accuracy: (\d+(?:\,\d+)?); count: (\d+)\\n$"
+    i = 0
+    with open('accuracy.txt') as f:
+        lines = f.readlines()
+        for line in lines:
+            if i == 5:
+                m = re.match(regex, line)
+                y.append(m[1])
+                x.append(m[2])
+                i = 0
+                continue
+            i += 1
+    drawPlot(x, y)
