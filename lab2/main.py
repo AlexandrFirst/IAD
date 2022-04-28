@@ -6,18 +6,8 @@ import plotly.figure_factory as ff
 import random
 
 
-def corr2cov(p: np.ndarray, s: np.ndarray) -> np.ndarray:
-    d = np.diag(s)
-    return d @ p @ d
-
-
 def gen_сorr_rand_data() -> [[]]:
-    corr = [[1., -0.4], [-0.4, 1.]]
-    stdev = np.array([1., .4])
-    mean = np.array([1., 1.])
-    cov = corr2cov(corr, stdev)
-    data = np.random.multivariate_normal(mean=mean, cov=cov, size=410)
-
+    data = [[random.random() * 2.0, random.random() * 2.0] for _ in range(410)]
     return data
 
 
@@ -25,9 +15,9 @@ def flatter_coords(coords):
     x = []
     y = []
 
-    for coord in coords:
-        x.append(coord[0])
-        y.append(coord[1])
+    for m_x, m_y in coords:
+        x.append(m_x)
+        y.append(m_y)
     return [x, y]
 
 
@@ -66,8 +56,11 @@ def calculate_deviation(all_c_s):
 
         all_c_s_mod.append(c_s_mod)
 
-    for m in c_s_means:
-        m /= N
+    k = 0
+    for indx, m in enumerate(c_s_means):
+        print(f"Before: {c_s_means[indx]}")
+        c_s_means[indx] = m / N
+        print(f"After: {m / N}")
 
     t = [0, 0, 0]
 
@@ -80,14 +73,16 @@ def calculate_deviation(all_c_s):
 
     return c_s_dev
 
+
 def calc_condition_of_clustering(c_s_dev, iter_count) -> bool:
     if iter_count < 3:
         return True
+    print(c_s_dev)
 
-    for d in c_s_dev:
-        if d > .55:
-            return False
-    return True
+    if math.fsum(c_s_dev)/len(c_s_dev) > .55:
+        return True
+    return False
+
 
 def main():
     coords = gen_сorr_rand_data()
@@ -97,7 +92,7 @@ def main():
     all_c_s = []
 
     while len(c_s_indexes) < 3:
-        rand = random.randrange(0, 400)
+        rand = random.randrange(0, 410)
         if rand in c_s_indexes:
             continue
         c_s_indexes.append(rand)
@@ -134,10 +129,13 @@ def main():
         plt.scatter(data[0], data[1], s=4)
 
     plt.show()
-    fig1 = ff.create_dendrogram(coords, orientation='left')
+
+    x = [[m] for m, p in coords]
+
+    X = np.array(x)
+    fig1 = ff.create_dendrogram(X, orientation='left')
     fig1.update_layout(width=800, height=800)
     fig1.show()
-
 
 
 # Press the green button in the gutter to run the script.
